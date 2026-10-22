@@ -5,6 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val appVersion = (property("appVersion") as String).toInt()
+
 android {
     namespace = "com.example.s25app"
     compileSdk = 35
@@ -13,8 +15,9 @@ android {
         applicationId = "com.example.s25app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3"
+        // +10, bo pierwsze testowe wersje miały już numery 1–3.
+        versionCode = appVersion + 10
+        versionName = "v$appVersion"
     }
 
     signingConfigs {

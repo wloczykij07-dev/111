@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,13 +21,31 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Read app version
+        run: echo "APP_VERSION=$(grep '^appVersion=' gradle.properties | cut -d= -f2)" >> "$GITHUB_ENV"
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk "dieta-v${APP_VERSION}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dieta-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: dieta-v${{ env.APP_VERSION }}
+          path: dieta-v${{ env.APP_VERSION }}.apk
+
+      # Wydanie z samym plikiem .apk - łatwe pobieranie na telefonie.
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: Dieta v${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
+          files: dieta-v${{ env.APP_VERSION }}.apk
+          make_latest: true
+          body: |
+            Pobierz plik dieta-v${{ env.APP_VERSION }}.apk poniżej i otwórz go na telefonie, aby zainstalować.
