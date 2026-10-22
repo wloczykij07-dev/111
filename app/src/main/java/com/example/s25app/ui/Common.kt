@@ -1,6 +1,12 @@
 package com.example.s25app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,9 +18,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,12 +34,15 @@ import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,7 +65,13 @@ fun ScreenScaffold(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -121,21 +139,55 @@ fun ingredientAmount(i: Ingredient): String {
 }
 
 @Composable
-fun RecipeCard(recipe: Recipe, query: String, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(recipe.name, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${recipe.mealType.label} · ${nutritionShort(recipe.nutrition)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val matched = matchedIngredients(recipe, query)
-            if (matched.isNotEmpty()) {
+fun RecipeCard(
+    recipe: Recipe,
+    query: String,
+    onToggleFavorite: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val colors = mealColors(recipe.mealType)
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = colors.container),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(6.dp).fillMaxHeight().background(colors.accent))
+            Text(recipe.mealType.emoji, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.headlineSmall)
+            Column(
+                Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(recipe.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Zawiera: " + matched.joinToString { "${it.name} ${fmt(it.amount)} ${it.unit}" },
+                    "${recipe.mealType.label} · ${nutritionShort(recipe.nutrition)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val matched = matchedIngredients(recipe, query)
+                if (matched.isNotEmpty()) {
+                    Text(
+                        "Zawiera: " + matched.joinToString { "${it.name} ${fmt(it.amount)} ${it.unit}" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.accent,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            if (onToggleFavorite != null) {
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        if (recipe.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (recipe.favorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                        tint = FavoriteRed,
+                    )
+                }
+            } else if (recipe.favorite) {
+                Icon(
+                    Icons.Default.Favorite,
+                    contentDescription = "Ulubiony",
+                    tint = FavoriteRed,
+                    modifier = Modifier.padding(end = 12.dp),
                 )
             }
         }
@@ -190,6 +242,11 @@ fun IngredientInfoDialog(
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Row(modifier.padding(top = 8.dp, bottom = 4.dp)) {
-        Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            text,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.secondary,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }

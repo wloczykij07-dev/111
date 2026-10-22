@@ -1,6 +1,8 @@
 package com.example.s25app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,10 +21,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +47,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.s25app.logic.fmt
 import com.example.s25app.logic.parseNumber
@@ -51,16 +58,50 @@ import com.example.s25app.model.Nutrition
 import com.example.s25app.model.Recipe
 
 @Composable
-fun MealTypeChips(selected: MealType?, onSelect: (MealType?) -> Unit, allowAll: Boolean) {
+fun MealTypeChips(
+    selected: MealType?,
+    onSelect: (MealType?) -> Unit,
+    allowAll: Boolean,
+    favoritesOnly: Boolean? = null,
+    onFavoritesChange: (Boolean) -> Unit = {},
+) {
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (favoritesOnly != null) {
+            FilterChip(
+                selected = favoritesOnly,
+                onClick = { onFavoritesChange(!favoritesOnly) },
+                label = { Text("Ulubione") },
+                leadingIcon = {
+                    Icon(
+                        if (favoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        tint = FavoriteRed,
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = FavoriteRed.copy(alpha = 0.18f),
+                ),
+            )
+        }
         if (allowAll) {
             FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("Wszystkie") })
         }
         MealType.entries.forEach { type ->
-            FilterChip(selected = selected == type, onClick = { onSelect(type) }, label = { Text(type.label) })
+            val colors = mealColors(type)
+            FilterChip(
+                selected = selected == type,
+                onClick = { onSelect(type) },
+                label = { Text("${type.emoji} ${type.label}") },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = colors.container.copy(alpha = 0.5f),
+                    selectedContainerColor = colors.accent,
+                    selectedLabelColor = Color.White,
+                ),
+                border = null,
+            )
         }
     }
 }
@@ -69,10 +110,12 @@ fun MealTypeChips(selected: MealType?, onSelect: (MealType?) -> Unit, allowAll: 
 fun RecipesScreen(vm: AppViewModel) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<MealType?>(null) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     val list = vm.data.recipes
         .filter { filter == null || it.mealType == filter }
+        .filter { !favoritesOnly || it.favorite }
         .filter { matchesQuery(it, query) }
-        .sortedBy { it.name.lowercase() }
+        .sortedWith(compareBy({ !it.favorite }, { it.name.lowercase() }))
 
     ScreenScaffold(
         title = "Przepisy",
@@ -87,7 +130,7 @@ fun RecipesScreen(vm: AppViewModel) {
         Column(Modifier.padding(padding).padding(horizontal = 16.dp)) {
             SearchField(query, { query = it }, "Szukaj po nazwie lub składniku")
             Spacer(Modifier.height(8.dp))
-            MealTypeChips(filter, { filter = it }, allowAll = true)
+            MealTypeChips(filter, { filter = it }, allowAll = true, favoritesOnly, { favoritesOnly = it })
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
@@ -95,14 +138,20 @@ fun RecipesScreen(vm: AppViewModel) {
                 if (list.isEmpty()) {
                     item {
                         Text(
-                            if (vm.data.recipes.isEmpty()) "Brak przepisów. Dodaj pierwszy przyciskiem + albo zaimportuj zdjęcie."
-                            else "Nic nie pasuje do wyszukiwania.",
+                            when {
+                                vm.data.recipes.isEmpty() -> "Brak przepisów. Dodaj pierwszy przyciskiem + albo zaimportuj zdjęcie."
+                                favoritesOnly && vm.data.recipes.none { it.favorite } ->
+                                    "Nie masz jeszcze ulubionych. Dotknij serca przy przepisie, aby go dodać."
+                                else -> "Nic nie pasuje do wyszukiwania."
+                            },
                             modifier = Modifier.padding(16.dp),
                         )
                     }
                 }
                 items(list, key = { it.id }) { r ->
-                    RecipeCard(r, query) { vm.push(Screen.RecipeDetail(r.id)) }
+                    RecipeCard(r, query, onToggleFavorite = { vm.toggleFavorite(r.id) }) {
+                        vm.push(Screen.RecipeDetail(r.id))
+                    }
                 }
             }
         }
@@ -121,6 +170,13 @@ fun RecipeDetailScreen(vm: AppViewModel, id: Long) {
         title = recipe.name,
         onBack = vm::pop,
         actions = {
+            IconButton(onClick = { vm.toggleFavorite(recipe.id) }) {
+                Icon(
+                    if (recipe.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (recipe.favorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                    tint = FavoriteRed,
+                )
+            }
             IconButton(onClick = { vm.push(Screen.RecipeEdit(recipe)) }) {
                 Icon(Icons.Default.Edit, contentDescription = "Edytuj")
             }
@@ -133,7 +189,11 @@ fun RecipeDetailScreen(vm: AppViewModel, id: Long) {
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(recipe.mealType.label, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "${recipe.mealType.emoji} ${recipe.mealType.label}",
+                color = mealColors(recipe.mealType).accent,
+                style = MaterialTheme.typography.titleMedium,
+            )
             NutritionTable(recipe.nutrition)
             SectionTitle("Składniki")
             recipe.ingredients.forEach { i ->
@@ -168,16 +228,20 @@ fun RecipeDetailScreen(vm: AppViewModel, id: Long) {
 
 @Composable
 fun NutritionTable(n: Nutrition) {
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf(
-                "kcal" to n.kcal, "białko" to n.protein, "tłuszcz" to n.fat,
-                "węgl." to n.carbs, "błonnik" to n.fiber, "WW" to n.ww,
-            ).forEach { (label, value) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(fmt(value), style = MaterialTheme.typography.titleSmall)
-                    Text(label, style = MaterialTheme.typography.labelSmall)
-                }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(
+            "kcal" to n.kcal, "białko" to n.protein, "tłuszcz" to n.fat,
+            "węgl." to n.carbs, "błonnik" to n.fiber, "WW" to n.ww,
+        ).forEachIndexed { index, (label, value) ->
+            val color = NutrientColors[index]
+            Column(
+                Modifier.weight(1f)
+                    .background(color.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(fmt(value), style = MaterialTheme.typography.titleSmall, color = color, fontWeight = FontWeight.Bold)
+                Text(label, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

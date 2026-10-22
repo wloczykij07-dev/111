@@ -13,8 +13,19 @@ android {
         applicationId = "com.example.s25app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
+    }
+
+    signingConfigs {
+        // Stały klucz testowy w repozytorium: każda nowa wersja APK
+        // instaluje się jako aktualizacja, bez odinstalowywania.
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

@@ -3,11 +3,11 @@ package com.example.s25app.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class MealType(val label: String) {
-    BREAKFAST("Śniadanie"),
-    SNACK("Przekąska"),
-    LUNCH("Obiad"),
-    DINNER("Kolacja"),
+enum class MealType(val label: String, val emoji: String) {
+    BREAKFAST("Śniadanie", "🍳"),
+    SNACK("Przekąska", "🍎"),
+    LUNCH("Obiad", "🍲"),
+    DINNER("Kolacja", "🌙"),
 }
 
 @Serializable
@@ -42,6 +42,7 @@ data class Recipe(
     val ingredients: List<Ingredient> = emptyList(),
     val nutrition: Nutrition = Nutrition(),
     val steps: String = "",
+    val favorite: Boolean = false,
 )
 
 /** Klucz slotu w planie: "<dzień 0-6>-<MealType>". */

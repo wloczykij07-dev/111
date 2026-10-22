@@ -1,7 +1,11 @@
 package com.example.s25app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -34,6 +40,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -70,28 +78,44 @@ fun PlanScreen(vm: AppViewModel) {
                 }
                 val total = recipes.values.filterNotNull().fold(Nutrition()) { acc, r -> acc + r.nutrition }
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(DAYS[day], style = MaterialTheme.typography.titleMedium)
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            DAYS[day],
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                         if (total.kcal > 0) {
                             Text(
                                 nutritionShort(total),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
+                    }
+                    Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         MealType.entries.forEach { meal ->
                             val r = recipes[meal]
+                            val colors = mealColors(meal)
                             Row(
                                 Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (r != null) colors.container else Color.Transparent)
                                     .clickable { vm.push(Screen.PickRecipe(day, meal)) }
-                                    .padding(vertical = 8.dp),
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                Text(meal.emoji, Modifier.padding(end = 8.dp))
                                 Text(
                                     meal.label,
-                                    Modifier.width(96.dp),
+                                    Modifier.width(84.dp),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = colors.accent,
+                                    fontWeight = FontWeight.Bold,
                                 )
                                 Text(
                                     r?.name ?: "wybierz…",
@@ -132,11 +156,13 @@ fun PlanScreen(vm: AppViewModel) {
 fun PickRecipeScreen(vm: AppViewModel, screen: Screen.PickRecipe) {
     var query by rememberSaveable { mutableStateOf("") }
     var onlyThisMeal by rememberSaveable { mutableStateOf(true) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     val current = vm.data.plan[planKey(screen.day, screen.meal)]
     val list = vm.data.recipes
         .filter { !onlyThisMeal || it.mealType == screen.meal }
+        .filter { !favoritesOnly || it.favorite }
         .filter { matchesQuery(it, query) }
-        .sortedBy { it.name.lowercase() }
+        .sortedWith(compareBy({ !it.favorite }, { it.name.lowercase() }))
 
     ScreenScaffold(title = "${screen.meal.label} – ${DAYS[screen.day]}", onBack = vm::pop) { padding ->
         LazyColumn(
@@ -147,11 +173,27 @@ fun PickRecipeScreen(vm: AppViewModel, screen: Screen.PickRecipe) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SearchField(query, { query = it }, "Szukaj po nazwie lub składniku")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         FilterChip(
                             selected = onlyThisMeal,
                             onClick = { onlyThisMeal = !onlyThisMeal },
-                            label = { Text("Tylko: ${screen.meal.label.lowercase()}") },
+                            label = { Text("${screen.meal.emoji} Tylko: ${screen.meal.label.lowercase()}") },
+                        )
+                        FilterChip(
+                            selected = favoritesOnly,
+                            onClick = { favoritesOnly = !favoritesOnly },
+                            label = { Text("Ulubione") },
+                            leadingIcon = {
+                                Icon(
+                                    if (favoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = FavoriteRed,
+                                )
+                            },
                         )
                         if (current != null) {
                             OutlinedButton(onClick = {
@@ -267,7 +309,11 @@ private fun ShoppingRow(vm: AppViewModel, item: ShoppingItem, bought: Boolean, o
                     Modifier.weight(1f),
                     textDecoration = if (bought) TextDecoration.LineThrough else null,
                 )
-                Text("${fmt(item.toBuy)} ${item.unit}", fontWeight = FontWeight.Bold)
+                Text(
+                    "${fmt(item.toBuy)} ${item.unit}",
+                    fontWeight = FontWeight.Bold,
+                    color = if (bought) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.secondary,
+                )
             }
             val details = buildList {
                 add("potrzebne ${fmt(item.needed)} ${item.unit}")

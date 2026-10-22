@@ -97,6 +97,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    fun toggleFavorite(id: Long) = update { d ->
+        d.copy(recipes = d.recipes.map { if (it.id == id) it.copy(favorite = !it.favorite) else it })
+    }
+
     fun setPlan(day: Int, meal: MealType, recipeId: Long?) = update { d ->
         val key = planKey(day, meal)
         d.copy(plan = if (recipeId == null) d.plan - key else d.plan + (key to recipeId))
