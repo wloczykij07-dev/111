@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.s25app.data.Storage
+import com.example.s25app.logic.Diary
 import com.example.s25app.logic.RecipeParser
 import com.example.s25app.logic.Shopping
 import com.example.s25app.model.AppData
@@ -19,12 +20,14 @@ import com.example.s25app.ocr.Ocr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 enum class Tab(val label: String) {
     RECIPES("Przepisy"),
     PLAN("Plan"),
     SHOPPING("Zakupy"),
     PANTRY("Zapasy"),
+    STATS("Statystyki"),
 }
 
 sealed interface Screen {
@@ -91,9 +94,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteRecipe(id: Long) = update { d ->
+        val plan = d.plan.filterValues { it != id }
         d.copy(
             recipes = d.recipes.filterNot { it.id == id },
-            plan = d.plan.filterValues { it != id },
+            plan = plan,
+            eaten = d.eaten.filterKeys { it in plan },
         )
     }
 
@@ -101,10 +106,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         d.copy(recipes = d.recipes.map { if (it.id == id) it.copy(favorite = !it.favorite) else it })
     }
 
-    fun setPlan(day: Int, meal: MealType, recipeId: Long?) = update { d ->
-        val key = planKey(day, meal)
-        d.copy(plan = if (recipeId == null) d.plan - key else d.plan + (key to recipeId))
+    fun setPlan(day: Int, meal: MealType, recipeId: Long?) = update { Diary.setSlot(it, planKey(day, meal), recipeId) }
+
+    fun toggleEaten(day: Int, meal: MealType) = update {
+        Diary.toggleEaten(it, planKey(day, meal), LocalDate.now().toString())
     }
+
+    fun clearPlan() = update { Diary.clearPlan(it) }
 
     fun toggleBought(key: String) = update { d ->
         d.copy(bought = if (key in d.bought) d.bought - key else d.bought + key)

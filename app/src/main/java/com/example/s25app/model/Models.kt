@@ -59,7 +59,22 @@ data class AppData(
     val packageSizes: Map<String, Double> = emptyMap(),
     /** klucze składników odhaczonych na liście zakupów */
     val bought: Set<String> = emptySet(),
+    /** slot planu -> id wpisu w historii zjedzonych posiłków */
+    val eaten: Map<String, Long> = emptyMap(),
+    /** wszystkie zjedzone posiłki; zostają po wyczyszczeniu planu */
+    val history: List<EatenMeal> = emptyList(),
     val nextId: Long = 1,
+)
+
+@Serializable
+data class EatenMeal(
+    val id: Long,
+    val recipeId: Long,
+    val name: String,
+    val mealType: MealType,
+    /** data w formacie RRRR-MM-DD */
+    val date: String,
+    val kcal: Double = 0.0,
 )
 
 /** Klucz pozwalający łączyć ten sam składnik z różnych przepisów. */

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -47,6 +48,7 @@ private fun Tabs(vm: AppViewModel) {
                                     Tab.PLAN -> Icons.Default.DateRange
                                     Tab.SHOPPING -> Icons.Default.ShoppingCart
                                     Tab.PANTRY -> Icons.Default.Home
+                                    Tab.STATS -> Icons.Default.Star
                                 },
                                 contentDescription = null,
                             )
@@ -63,6 +65,7 @@ private fun Tabs(vm: AppViewModel) {
                 Tab.PLAN -> PlanScreen(vm)
                 Tab.SHOPPING -> ShoppingScreen(vm)
                 Tab.PANTRY -> PantryScreen(vm)
+                Tab.STATS -> StatsScreen(vm)
             }
         }
     }

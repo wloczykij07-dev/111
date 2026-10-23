@@ -99,7 +99,7 @@ object Shopping {
             val remaining = item.inStock + bought - item.needed
             if (remaining > 0.0) pantry[item.key] = remaining else pantry.remove(item.key)
         }
-        return data.copy(plan = emptyMap(), pantry = pantry, bought = emptySet())
+        return Diary.clearPlan(data).copy(pantry = pantry)
     }
 
     fun asText(items: List<ShoppingItem>): String = buildString {

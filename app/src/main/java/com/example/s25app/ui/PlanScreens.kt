@@ -1,6 +1,7 @@
 package com.example.s25app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -12,18 +13,21 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,18 +57,26 @@ import com.example.s25app.model.MealType
 import com.example.s25app.model.Nutrition
 import com.example.s25app.model.ingredientKey
 import com.example.s25app.model.planKey
+import java.time.LocalDate
 
 val DAYS = listOf("Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela")
 
 @Composable
 fun PlanScreen(vm: AppViewModel) {
     var confirmNewWeek by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
     val data = vm.data
+    val today = LocalDate.now().dayOfWeek.value - 1
     ScreenScaffold(
         title = "Plan tygodnia",
         inTab = true,
         actions = {
-            if (data.plan.isNotEmpty()) TextButton(onClick = { confirmNewWeek = true }) { Text("Nowy tydzień") }
+            if (data.plan.isNotEmpty()) {
+                IconButton(onClick = { confirmClear = true }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Wyczyść plan")
+                }
+                TextButton(onClick = { confirmNewWeek = true }) { Text("Nowy tydzień") }
+            }
         },
     ) { padding ->
         LazyColumn(
@@ -76,19 +88,38 @@ fun PlanScreen(vm: AppViewModel) {
                 val recipes = MealType.entries.associateWith { meal ->
                     data.plan[planKey(day, meal)]?.let { vm.recipe(it) }
                 }
-                val total = recipes.values.filterNotNull().fold(Nutrition()) { acc, r -> acc + r.nutrition }
-                Card(Modifier.fillMaxWidth()) {
+                val planned = recipes.filterValues { it != null }
+                val eaten = planned.keys.filter { planKey(day, it) in data.eaten }
+                val total = planned.values.filterNotNull().fold(Nutrition()) { acc, r -> acc + r.nutrition }
+                val eatenKcal = eaten.sumOf { recipes[it]?.nutrition?.kcal ?: 0.0 }
+                Card(
+                    Modifier.fillMaxWidth(),
+                    border = if (day == today) BorderStroke(2.dp, MaterialTheme.colorScheme.secondary) else null,
+                ) {
                     Column(
                         Modifier.fillMaxWidth()
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        Text(
-                            DAYS[day],
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                DAYS[day],
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            if (day == today) {
+                                Text(
+                                    "DZIŚ",
+                                    Modifier.background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
                         if (total.kcal > 0) {
                             Text(
                                 nutritionShort(total),
@@ -96,17 +127,28 @@ fun PlanScreen(vm: AppViewModel) {
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
+                        if (planned.isNotEmpty()) {
+                            Text(
+                                "Zjedzone: ${eaten.size} z ${planned.size}" +
+                                    if (eaten.isNotEmpty()) " · ${fmt(eatenKcal)} z ${fmt(total.kcal)} kcal" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
                     }
                     Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         MealType.entries.forEach { meal ->
                             val r = recipes[meal]
+                            val isEaten = planKey(day, meal) in data.eaten
                             val colors = mealColors(meal)
                             Row(
                                 Modifier.fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(if (r != null) colors.container else Color.Transparent)
                                     .clickable { vm.push(Screen.PickRecipe(day, meal)) }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                    .padding(start = 8.dp, end = if (r != null) 0.dp else 8.dp)
+                                    .heightIn(min = 40.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(meal.emoji, Modifier.padding(end = 8.dp))
@@ -117,18 +159,49 @@ fun PlanScreen(vm: AppViewModel) {
                                     color = colors.accent,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                Text(
-                                    r?.name ?: "wybierz…",
-                                    Modifier.weight(1f),
-                                    color = if (r == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-                                )
-                                if (r != null) Text("${fmt(r.nutrition.kcal)} kcal", style = MaterialTheme.typography.bodySmall)
+                                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                                    Text(
+                                        r?.name ?: "wybierz…",
+                                        color = when {
+                                            r == null || isEaten -> MaterialTheme.colorScheme.outline
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
+                                        textDecoration = if (isEaten) TextDecoration.LineThrough else null,
+                                    )
+                                    if (r != null) Text("${fmt(r.nutrition.kcal)} kcal", style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (r != null) {
+                                    Checkbox(
+                                        checked = isEaten,
+                                        onCheckedChange = { vm.toggleEaten(day, meal) },
+                                        colors = CheckboxDefaults.colors(checkedColor = colors.accent),
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Wyczyścić plan?") },
+            text = {
+                Text(
+                    "Wszystkie posiłki znikną z planu, a odhaczenia na liście zakupów zostaną usunięte. " +
+                        "Zapasy i statystyki zjedzonych posiłków się nie zmienią.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClear = false
+                    vm.clearPlan()
+                }) { Text("Wyczyść") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Anuluj") } },
+        )
     }
     if (confirmNewWeek) {
         AlertDialog(
@@ -137,7 +210,7 @@ fun PlanScreen(vm: AppViewModel) {
             text = {
                 Text(
                     "Plan zostanie wyczyszczony. Składniki odhaczone na liście zakupów jako kupione, " +
-                        "pomniejszone o zużyte w przepisach ilości, trafi do zapasów. " +
+                        "pomniejszone o zużyte w przepisach ilości, trafią do zapasów. " +
                         "Dzięki temu w następnym tygodniu nie kupisz tego, co już masz.",
                 )
             },
