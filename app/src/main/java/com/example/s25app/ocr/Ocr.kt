@@ -10,6 +10,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.atan2
 import kotlin.math.max
 
 /**
@@ -33,16 +35,26 @@ object Ocr {
         try {
             var best = ""
             var bestScore = -1
-            for (rotation in listOf(0, 90, 270, 180)) {
-                val rotated = rotate(bitmap, rotation)
-                val text = recognizer.process(InputImage.fromBitmap(rotated, 0)).await().text
-                val score = score(text)
+            val tried = mutableSetOf<Int>()
+            val rotations = ArrayDeque(listOf(0, 90, 270, 180))
+            while (rotations.isNotEmpty()) {
+                val rotation = rotations.removeFirst()
+                if (!tried.add(rotation)) continue
+                val result = recognizer.process(InputImage.fromBitmap(rotate(bitmap, rotation), 0)).await()
+                val text = result.text
+                // ML Kit czyta też tekst leżący bokiem, ale kolejność linii liczy
+                // względem obrazu, więc wychodzi np. od dołu do góry. Wtedy
+                // najpierw próbujemy obrotu, przy którym tekst stoi prosto.
+                val angle = dominantTextAngle(result)
+                if (angle != 0) rotations.addFirst((rotation + 360 - angle) % 360)
+                val upright = angle == 0 && ingredientLines(text) > 0
+                val score = score(text) + if (upright) 1000 else 0
                 if (score > bestScore) {
                     best = text
                     bestScore = score
                 }
-                // Wyraźnie dobry wynik - nie ma sensu próbować dalej.
-                if (ingredientLines(text) >= 3) break
+                // Wyraźnie dobry wynik z prosto stojącym tekstem - koniec.
+                if (upright && ingredientLines(text) >= 3) break
             }
             return best
         } finally {
@@ -79,6 +91,22 @@ object Ocr {
         } finally {
             recognizer.close()
         }
+    }
+
+    /** Przeważający kierunek tekstu na obrazie: 0, 90, 180 lub 270 stopni (zgodnie z ruchem wskazówek). */
+    private fun dominantTextAngle(result: Text): Int {
+        val votes = IntArray(4)
+        for (block in result.textBlocks) {
+            for (line in block.lines) {
+                val p = line.cornerPoints ?: continue
+                if (p.size < 2) continue
+                val degrees = Math.toDegrees(atan2((p[1].y - p[0].y).toDouble(), (p[1].x - p[0].x).toDouble()))
+                val quarter = (((degrees + 405) % 360) / 90).toInt() % 4
+                votes[quarter] += line.text.length
+            }
+        }
+        if (votes.sum() == 0) return 0
+        return votes.indices.maxBy { votes[it] } * 90
     }
 
     private fun ingredientLines(text: String) =

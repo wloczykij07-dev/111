@@ -59,9 +59,11 @@ object RecipeParser {
     }
 
     fun parse(text: String): List<Recipe> {
-        val lines = joinWrappedLines(
-            text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        )
+        var rawLines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        // Rozpoznawanie zdjęcia czasem zwraca linie od dołu do góry -
+        // widać to po krokach numerowanych malejąco (8, 7, 6...).
+        if (looksReversed(rawLines)) rawLines = rawLines.reversed()
+        val lines = joinWrappedLines(rawLines)
         // Na zdjęciu strony z dwiema kolumnami rozpoznany tekst często zawiera
         // najpierw wszystkie nazwy i składniki, a dopiero potem wartości
         // odżywcze i kroki. Wtedy przypisujemy je kolejno do przepisów.
@@ -155,6 +157,14 @@ object RecipeParser {
         return result
             .filter { it.ingredients.isNotEmpty() }
             .map { it.build() }
+    }
+
+    private fun looksReversed(lines: List<String>): Boolean {
+        val numbers = lines.mapNotNull { stepRegex.matchEntire(it)?.groupValues?.get(1)?.toInt() }
+        val pairs = numbers.zipWithNext()
+        val descending = pairs.count { (a, b) -> b == a - 1 }
+        val ascending = pairs.count { (a, b) -> b == a + 1 }
+        return descending > ascending
     }
 
     /** Skleja linie składnika rozbite na kilka linii, np. "... - 100 g (1 x" + "Kawałek)". */

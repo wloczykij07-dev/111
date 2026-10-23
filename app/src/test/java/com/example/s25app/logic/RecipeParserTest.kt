@@ -103,6 +103,12 @@ class RecipeParserTest {
     }
 
     @Test
+    fun fixesTextReadFromBottomToTop() {
+        val reversed = sequential.lines().reversed().joinToString("\n")
+        assertEquals(RecipeParser.parse(sequential), RecipeParser.parse(reversed))
+    }
+
+    @Test
     fun convertsKilogramsAndCommas() {
         val recipes = RecipeParser.parse(
             """
