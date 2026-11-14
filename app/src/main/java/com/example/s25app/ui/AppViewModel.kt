@@ -2,6 +2,7 @@ package com.example.s25app.ui
 
 import android.app.Application
 import android.net.Uri
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     var tab by mutableStateOf(Tab.RECIPES)
     val stack = mutableStateListOf<Screen>()
+
+    // Filtry listy przepisów są tutaj, a nie w ekranie, żeby przetrwały
+    // otwarcie przepisu i powrót do listy.
+    var recipeQuery by mutableStateOf("")
+    var recipeMealFilter by mutableStateOf<MealType?>(null)
+    var recipeFavoritesOnly by mutableStateOf(false)
+    val recipeListState = LazyListState()
+
+    val recipeFiltersActive: Boolean
+        get() = recipeQuery.isNotBlank() || recipeMealFilter != null || recipeFavoritesOnly
+
+    fun clearRecipeFilters() {
+        recipeQuery = ""
+        recipeMealFilter = null
+        recipeFavoritesOnly = false
+    }
 
     var importText by mutableStateOf("")
     var importBusy by mutableStateOf(false)

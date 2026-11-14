@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,9 +107,9 @@ fun MealTypeChips(
 
 @Composable
 fun RecipesScreen(vm: AppViewModel) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf<MealType?>(null) }
-    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    val query = vm.recipeQuery
+    val filter = vm.recipeMealFilter
+    val favoritesOnly = vm.recipeFavoritesOnly
     val list = vm.data.recipes
         .filter { filter == null || it.mealType == filter }
         .filter { !favoritesOnly || it.favorite }
@@ -128,10 +127,24 @@ fun RecipesScreen(vm: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).padding(horizontal = 16.dp)) {
-            SearchField(query, { query = it }, "Szukaj po nazwie lub składniku")
+            SearchField(query, { vm.recipeQuery = it }, "Szukaj po nazwie lub składniku")
             Spacer(Modifier.height(8.dp))
-            MealTypeChips(filter, { filter = it }, allowAll = true, favoritesOnly, { favoritesOnly = it })
+            MealTypeChips(
+                filter, { vm.recipeMealFilter = it }, allowAll = true,
+                favoritesOnly, { vm.recipeFavoritesOnly = it },
+            )
+            if (vm.recipeFiltersActive) {
+                ActiveFiltersBar(
+                    query = query,
+                    mealType = filter,
+                    favoritesOnly = favoritesOnly,
+                    shown = list.size,
+                    total = vm.data.recipes.size,
+                    onClear = vm::clearRecipeFilters,
+                )
+            }
             LazyColumn(
+                state = vm.recipeListState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
             ) {
@@ -155,6 +168,44 @@ fun RecipesScreen(vm: AppViewModel) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ActiveFiltersBar(
+    query: String,
+    mealType: MealType?,
+    favoritesOnly: Boolean,
+    shown: Int,
+    total: Int,
+    onClear: () -> Unit,
+) {
+    val parts = buildList {
+        if (query.isNotBlank()) add("„${query.trim()}”")
+        if (mealType != null) add("${mealType.emoji} ${mealType.label}")
+        if (favoritesOnly) add("❤ Ulubione")
+    }
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(top = 8.dp)
+            .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(12.dp))
+            .padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Text(
+                "Filtr aktywny: " + parts.joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            Text(
+                "Pokazano $shown z $total przepisów",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+        }
+        TextButton(onClick = onClear) { Text("Wyczyść filtry") }
     }
 }
 
